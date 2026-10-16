@@ -4,7 +4,7 @@ A browser-based interactive map interface for Obafemi Awolowo University in Ile-
 
 ## Run it
 
-Open `index.html` in a modern browser. Map tiles, search, routing, and weather require an internet connection. The geolocation control may require a secure browser context.
+For the full map, use the [GitHub Pages preview](https://fetty0012.github.io/Oau-field-pilot/). Opening `index.html` directly still shows the interface and lets you inspect the code, but deliberately disables OSM tiles and geocoding because `file://` pages cannot send the valid web referrer those volunteer services require. The hosted map, routing, and weather need an internet connection; geolocation requires a secure browser context.
 
 ## Add campus GIS data
 

@@ -254,6 +254,7 @@
     <script>
       (() => {
         const campus = { center: [4.5274, 7.5189], zoom: 15.2 };
+        const hostedOverHttps = location.protocol === "https:";
         const osmStyle = {
           version: 8,
           sources: {
@@ -266,9 +267,14 @@
           },
           layers: [{ id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.22, "raster-contrast": 0.04 } }]
         };
+        const mapStyle = hostedOverHttps ? osmStyle : {
+          version: 8,
+          sources: {},
+          layers: [{ id: "local-background", type: "background", paint: { "background-color": "#dce2d5" } }]
+        };
         const map = new maplibregl.Map({
           container: "map",
-          style: osmStyle,
+          style: mapStyle,
           center: campus.center,
           zoom: campus.zoom,
           minZoom: 2,
@@ -301,6 +307,7 @@
           clearTimeout(toastTimer);
           toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
         }
+        if (!hostedOverHttps) showToast("Open the published HTTPS map to load OpenStreetMap tiles.");
 
         function fetchNominatim(url) {
           const request = async () => {
