@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f3ec" />
+    <meta name="description" content="An interactive campus map for Obafemi Awolowo University, Ile-Ife." />
+    <title>OAU Field Atlas | Ile-Ife</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f4f3ec;
+        --paper-strong: #fffef9;
+        --ink: #1e3029;
+        --muted: #748078;
+        --line: #d9ddd3;
+        --green: #1c6047;
+        --green-deep: #133f32;
+        --lime: #d9f36a;
+        --coral: #ef795b;
+        --blue: #83b8c5;
+        --mono: "DM Mono", monospace;
+        --sans: "Manrope", sans-serif;
+        --rail: 376px;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body { background: var(--paper); color: var(--ink); font: 14px/1.45 var(--sans); overflow: hidden; }
+      button, input, select { font: inherit; }
+      button { color: inherit; }
+      .app { width: 100%; height: 100%; display: grid; grid-template-columns: var(--rail) 1fr; }
+      .sidebar { z-index: 3; height: 100%; display: flex; flex-direction: column; background: var(--paper-strong); border-right: 1px solid var(--line); overflow: auto; }
+      .brand { min-height: 80px; display: flex; align-items: center; gap: 12px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+      .brand-mark { width: 39px; height: 39px; display: grid; place-items: center; background: var(--green); color: var(--lime); font-size: 17px; font-weight: 800; border-radius: 3px; }
+      .brand-title { font-size: 14px; font-weight: 800; letter-spacing: 0; line-height: 1.15; }
+      .brand-sub { margin-top: 4px; color: var(--muted); font: 10px var(--mono); letter-spacing: 0; text-transform: uppercase; }
+      .campus-tag { margin-left: auto; padding: 6px 8px; border: 1px solid var(--line); color: var(--green); font: 10px var(--mono); border-radius: 2px; }
+      .search-wrap { padding: 20px 20px 14px; }
+      .eyebrow { color: var(--muted); font: 10px var(--mono); text-transform: uppercase; letter-spacing: 0; }
+      .search-box { height: 46px; display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 0 12px; border: 1px solid var(--line); background: #fafaf5; border-radius: 3px; }
+      .search-box:focus-within { border-color: var(--green); box-shadow: 0 0 0 2px #1c604714; }
+      .search-icon { color: var(--green); font-size: 17px; }
+      .search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); }
+      .search-box input::placeholder { color: #9aa39b; }
+      .search-submit { width: 30px; height: 30px; border: 0; border-radius: 2px; background: var(--green); color: white; font-size: 16px; cursor: pointer; }
+      .search-submit:hover { background: var(--green-deep); }
+      .section-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 20px 10px; }
+      .section-title { font-size: 12px; font-weight: 800; }
+      .count { color: var(--muted); font: 10px var(--mono); }
+      .filters { display: flex; gap: 6px; padding: 0 20px 14px; overflow-x: auto; scrollbar-width: none; }
+      .filter { flex: 0 0 auto; border: 1px solid var(--line); background: transparent; padding: 6px 9px; border-radius: 2px; color: #68766c; font-size: 11px; cursor: pointer; }
+      .filter[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: white; }
+      .places { min-height: 120px; padding: 0 12px 10px; }
+      .place-row { width: 100%; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-bottom: 1px solid #eceee7; background: transparent; text-align: left; cursor: pointer; }
+      .place-row:hover, .place-row.active { background: #eff3e9; }
+      .place-dot { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: #dfead9; color: var(--green); font-size: 11px; }
+      .place-name { display: block; overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+      .place-kind { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; text-transform: capitalize; }
+      .place-row-rating { display: block; margin-top: 3px; color: #8b6b24; font: 9px var(--mono); }
+      .row-arrow { color: #95a198; font-size: 16px; }
+      .empty-state { padding: 18px 11px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+      .location-details { margin: 2px 12px 14px; padding: 14px; border: 1px solid var(--line); border-left: 3px solid var(--green); background: #fafaf5; }
+      .detail-topline { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font: 9px var(--mono); }
+      .detail-close { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 2px; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; }
+      .detail-close:hover { border-color: var(--green); color: var(--green); }
+      .detail-name { margin: 8px 0 3px; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+      .detail-category { color: var(--green); font: 10px var(--mono); text-transform: uppercase; }
+      .detail-description { margin: 11px 0; color: #4b5d51; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+      .detail-facts { display: grid; gap: 7px; margin: 0; }
+      .detail-fact { display: grid; grid-template-columns: 78px 1fr; gap: 8px; font-size: 10px; }
+      .detail-fact dt { color: var(--muted); }
+      .detail-fact dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+      .detail-fact a { color: var(--green); }
+      .rating-box { margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--line); }
+      .rating-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .rating-value { font-size: 16px; font-weight: 800; }
+      .rating-stars { color: #b78324; letter-spacing: 0; }
+      .rating-caption, .rating-note { color: var(--muted); font-size: 9px; }
+      .your-rating { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+      .your-rating-label { color: var(--muted); font: 9px var(--mono); }
+      .rating-buttons { display: flex; gap: 2px; }
+      .rating-button { width: 27px; height: 27px; padding: 0; border: 1px solid transparent; border-radius: 2px; background: transparent; color: #b8bdb3; font-size: 18px; cursor: pointer; }
+      .rating-button:hover, .rating-button[aria-pressed="true"] { color: #b78324; }
+      .rating-button:focus-visible, .detail-close:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+      .rating-note { margin-top: 5px; }
+      .side-panels { margin-top: auto; border-top: 1px solid var(--line); }
+      .route-panel, .live-panel { padding: 15px 20px; border-bottom: 1px solid var(--line); }
+      .panel-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; font-weight: 800; font-size: 12px; }
+      .panel-mark { color: var(--green); font-size: 15px; }
+      .route-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .route-fields input { min-width: 0; width: 100%; height: 36px; padding: 0 9px; border: 1px solid var(--line); border-radius: 2px; outline: none; background: #fafaf5; font-size: 11px; }
+      .route-fields input:focus { border-color: var(--green); }
+      .route-actions { display: flex; gap: 7px; margin-top: 8px; }
+      .primary-btn, .quiet-btn { height: 35px; padding: 0 11px; border: 1px solid var(--green); border-radius: 2px; background: var(--green); color: white; font-size: 11px; font-weight: 700; cursor: pointer; }
+      .quiet-btn { border-color: var(--line); background: transparent; color: var(--ink); }
+      .primary-btn:hover { background: var(--green-deep); }
+      .quiet-btn:hover { border-color: var(--green); }
+      .route-status { min-height: 16px; margin-top: 8px; color: var(--muted); font-size: 10px; }
+      .live-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+      .weather { display: flex; align-items: center; gap: 8px; }
+      .weather-symbol { color: var(--coral); font-size: 20px; }
+      .weather-temp { font-size: 16px; font-weight: 800; }
+      .weather-copy, .clock-copy { color: var(--muted); font-size: 10px; }
+      .clock { text-align: right; font: 11px var(--mono); }
+      .feed-note { margin-top: 10px; padding-top: 9px; border-top: 1px solid #eceee7; color: var(--muted); font-size: 10px; }
+      .sidebar-foot { display: flex; align-items: center; justify-content: space-between; padding: 11px 20px; color: var(--muted); font: 9px var(--mono); }
+      .data-button { border: 0; background: none; color: var(--green); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+      .map-shell { position: relative; min-width: 0; height: 100%; overflow: hidden; background: #dce2d5; }
+      #map { position: absolute; inset: 0; }
+      .maplibregl-ctrl-group { border-radius: 3px !important; box-shadow: 0 2px 12px #18342720 !important; }
+      .maplibregl-ctrl button { width: 34px !important; height: 34px !important; }
+      .maplibregl-ctrl-attrib { font-size: 9px; }
+      .map-topbar { position: absolute; z-index: 2; top: 18px; left: 18px; right: 18px; display: flex; justify-content: space-between; gap: 10px; pointer-events: none; }
+      .map-context, .map-tools { display: flex; align-items: center; gap: 7px; pointer-events: auto; }
+      .map-context { padding: 9px 12px; border: 1px solid #d5dace; border-radius: 3px; background: #fffef9ed; box-shadow: 0 2px 10px #23382912; }
+      .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #719a53; box-shadow: 0 0 0 3px #719a5320; }
+      .context-title { font-size: 11px; font-weight: 800; }
+      .context-sub { color: var(--muted); font: 9px var(--mono); }
+      .tool-btn { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #d5dace; border-radius: 3px; background: #fffef9ed; color: var(--green); font-size: 16px; cursor: pointer; box-shadow: 0 2px 10px #23382912; }
+      .tool-btn:hover, .tool-btn[aria-pressed="true"] { background: var(--green); color: white; }
+      .tool-btn span { font: 10px var(--mono); }
+      .map-legend { position: absolute; z-index: 2; right: 18px; bottom: 22px; display: flex; align-items: center; gap: 12px; padding: 9px 11px; border: 1px solid #d5dace; border-radius: 3px; background: #fffef9ed; color: #65736a; font: 9px var(--mono); }
+      .legend-item { display: flex; align-items: center; gap: 5px; }
+      .legend-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--coral); }
+      .legend-block { width: 9px; height: 9px; background: #8ba78b; }
+      .map-toast { position: absolute; z-index: 4; left: 50%; bottom: 25px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; padding: 10px 14px; border-radius: 3px; background: var(--green-deep); color: white; font-size: 11px; transition: opacity .2s, transform .2s; }
+      .map-toast.show { opacity: 1; transform: translate(-50%, 0); }
+      .map-footer { position: absolute; bottom: 0; left: 0; padding: 5px 9px; color: #546359; background: #fffef9e8; font: 9px var(--mono); }
+      .map-footer a { color: var(--green); }
+      .maplibregl-popup-content { border-radius: 3px; padding: 12px 14px; font-family: var(--sans); box-shadow: 0 6px 24px #1c302933; }
+      .popup-name { font-weight: 800; font-size: 13px; }
+      .popup-meta { margin-top: 3px; color: var(--muted); font-size: 10px; text-transform: capitalize; }
+      .drop-overlay { position: absolute; z-index: 5; inset: 12px; display: none; place-items: center; border: 2px dashed var(--green); background: #f4f3ecdc; color: var(--green); text-align: center; font-weight: 800; font-size: 19px; pointer-events: none; }
+      .drop-overlay.show { display: grid; }
+      .drop-overlay small { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; font-weight: 500; }
+      @media (max-width: 820px) {
+        :root { --rail: 320px; }
+        .brand { padding-inline: 16px; }
+        .search-wrap { padding-inline: 15px; }
+        .section-head { padding-inline: 15px; }
+        .filters { padding-inline: 15px; }
+        .side-panels .route-panel, .side-panels .live-panel { padding-inline: 15px; }
+      }
+      @media (max-width: 640px) {
+        body { overflow: auto; }
+        .app { height: max(600px, 100dvh); min-height: max(600px, 100dvh); display: flex; flex-direction: column-reverse; }
+        .map-shell { height: 58%; min-height: 300px; flex: 1; }
+        .sidebar { height: 42%; min-height: 280px; flex: 0 0 auto; border-top: 1px solid var(--line); border-right: 0; }
+        .brand { min-height: 60px; padding-block: 10px; }
+        .brand-mark { width: 34px; height: 34px; }
+        .search-wrap { padding-top: 12px; padding-bottom: 8px; }
+        .section-head { padding-top: 6px; }
+        .filters { padding-bottom: 7px; }
+        .places { min-height: 65px; max-height: 110px; overflow: auto; }
+        .side-panels { display: grid; grid-template-columns: 1fr 1fr; margin-top: auto; }
+        .route-panel, .live-panel { padding: 10px 12px !important; border-bottom: 0; }
+        .route-panel { border-right: 1px solid var(--line); }
+        .panel-heading { margin-bottom: 7px; }
+        .feed-note { display: none; }
+        .sidebar-foot { display: none; }
+        .map-topbar { top: 10px; left: 10px; right: 10px; }
+        .map-legend { right: 10px; bottom: 12px; }
+      }
+      @media (max-width: 390px) {
+        .campus-tag { display: none; }
+        .map-context { padding: 7px 9px; }
+        .context-title { font-size: 10px; }
+        .map-legend { gap: 7px; font-size: 8px; }
+      }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <aside class="sidebar" aria-label="Campus map controls">
+        <header class="brand">
+          <div class="brand-mark" aria-hidden="true">O</div>
+          <div><div class="brand-title">OAU FIELD ATLAS</div><div class="brand-sub">Ile-Ife · Campus guide</div></div>
+          <span class="campus-tag">7.52° N</span>
+        </header>
+        <section class="search-wrap">
+          <div class="eyebrow">Explore the campus</div>
+          <form class="search-box" id="search-form">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="search" type="search" placeholder="Search places or addresses" autocomplete="off" aria-label="Search places or addresses" />
+            <button class="search-submit" type="submit" title="Search OpenStreetMap" aria-label="Search OpenStreetMap">↵</button>
+          </form>
+        </section>
+        <section aria-label="Campus places">
+          <div class="section-head"><span class="section-title">Places</span><span class="count" id="place-count">0 LOCATIONS</span></div>
+          <nav class="filters" id="filters" aria-label="Filter places">
+            <button class="filter" aria-pressed="true" data-category="all">All</button>
+            <button class="filter" aria-pressed="false" data-category="academic">Academic</button>
+            <button class="filter" aria-pressed="false" data-category="residential">Residential</button>
+            <button class="filter" aria-pressed="false" data-category="services">Services</button>
+          </nav>
+          <div class="places" id="places"><div class="empty-state">Import campus GIS data to browse locations. Type to filter imported data, or submit a one-time OpenStreetMap search.</div></div>
+          <section class="location-details" id="location-details" aria-labelledby="detail-name" hidden>
+            <div class="detail-topline"><span>LOCATION DETAILS</span><button class="detail-close" id="detail-close" type="button" title="Close location details" aria-label="Close location details">×</button></div>
+            <h2 class="detail-name" id="detail-name"></h2>
+            <div class="detail-category" id="detail-category"></div>
+            <p class="detail-description" id="detail-description"></p>
+            <dl class="detail-facts" id="detail-facts"></dl>
+            <div class="rating-box">
+              <div class="rating-summary"><div><div class="rating-value" id="rating-value">Not rated</div><div class="rating-caption" id="rating-caption">No imported rating</div></div><span class="rating-stars" id="rating-stars" aria-hidden="true">☆☆☆☆☆</span></div>
+              <div class="your-rating"><span class="your-rating-label">YOUR RATING</span><div class="rating-buttons" id="rating-buttons" aria-label="Rate this location"></div></div>
+              <div class="rating-note" id="rating-note">Your rating is saved in this browser only.</div>
+            </div>
+          </section>
+        </section>
+        <div class="side-panels">
+          <section class="route-panel">
+            <div class="panel-heading"><span class="panel-mark" aria-hidden="true">↗</span> Walking route</div>
+            <div class="route-fields">
+              <input id="route-from" type="text" placeholder="Start location" aria-label="Route start" />
+              <input id="route-to" type="text" placeholder="Destination" aria-label="Route destination" />
+            </div>
+            <div class="route-actions"><button id="route-button" class="primary-btn">Find route</button><button id="clear-route" class="quiet-btn" title="Clear route">Clear</button></div>
+            <div class="route-status" id="route-status" aria-live="polite">Pedestrian routing uses OpenStreetMap data.</div>
+          </section>
+          <section class="live-panel">
+            <div class="panel-heading"><span class="panel-mark" aria-hidden="true">◉</span> Around campus</div>
+            <div class="live-row">
+              <div class="weather"><span class="weather-symbol" aria-hidden="true">☼</span><div><div class="weather-temp" id="weather-temp">--°</div><div class="weather-copy" id="weather-copy">Local weather</div></div></div>
+              <div class="clock"><div id="campus-time">--:--</div><div class="clock-copy">ILE-IFE · WAT</div></div>
+            </div>
+            <div class="feed-note">Official campus alerts and service updates are not connected.</div>
+          </section>
+        </div>
+        <footer class="sidebar-foot"><span id="data-status">NO CAMPUS DATA</span><button class="data-button" id="import-link">Import GIS file</button></footer>
+      </aside>
+      <section class="map-shell" aria-label="Interactive map of Obafemi Awolowo University">
+        <div id="map"></div>
+        <div class="map-topbar">
+          <div class="map-context"><span class="live-dot"></span><div><div class="context-title">Obafemi Awolowo University</div><div class="context-sub">ILE-IFE, OSUN STATE</div></div></div>
+          <div class="map-tools">
+            <button class="tool-btn" id="locate" title="Locate me" aria-label="Locate me">◎</button>
+            <button class="tool-btn" id="view-toggle" title="Toggle 3D view" aria-label="Toggle 3D view" aria-pressed="false"><span>3D</span></button>
+            <button class="tool-btn" id="import-map" title="Import GIS file" aria-label="Import GIS file">＋</button>
+          </div>
+        </div>
+        <div class="map-legend"><span class="legend-item"><i class="legend-dot"></i> Selected place</span><span class="legend-item"><i class="legend-block"></i> Imported features</span></div>
+        <div class="map-toast" id="toast" role="status"></div>
+        <div class="map-footer">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Report a map issue</a></div>
+        <div class="drop-overlay" id="drop-overlay">Drop a GIS export to load it<small>GeoJSON, JSON or KML</small></div>
+        <input id="file-input" type="file" accept=".geojson,.json,.kml,application/geo+json,application/json,application/vnd.google-earth.kml+xml" hidden />
+      </section>
+    </main>
+    <script>
+      (() => {
+        const campus = { center: [4.5274, 7.5189], zoom: 15.2 };
+        const osmStyle = {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>'
+            }
+          },
+          layers: [{ id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.22, "raster-contrast": 0.04 } }]
+        };
+        const map = new maplibregl.Map({
+          container: "map",
+          style: osmStyle,
+          center: campus.center,
+          zoom: campus.zoom,
+          minZoom: 2,
+          maxZoom: 20,
+          pitch: 0,
+          attributionControl: false
+        });
+        map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+        map.addControl(new maplibregl.ScaleControl({ maxWidth: 110, unit: "metric" }), "bottom-left");
+
+        const $ = (id) => document.getElementById(id);
+        const placesEl = $("places");
+        const searchEl = $("search");
+        const routeStatus = $("route-status");
+        let features = [];
+        let selectedFeature = null;
+        let activeCategory = "all";
+        let routeGeoJson = null;
+        let toastTimer;
+        let nominatimQueue = Promise.resolve();
+        let lastNominatimRequest = 0;
+        const ratingStorageKey = "oau-field-atlas-ratings-v1";
+        let savedRatings = {};
+        try { savedRatings = JSON.parse(localStorage.getItem(ratingStorageKey) || "{}"); } catch { savedRatings = {}; }
+
+        function showToast(message) {
+          const toast = $("toast");
+          toast.textContent = message;
+          toast.classList.add("show");
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+        }
+
+        function fetchNominatim(url) {
+          const request = async () => {
+            if (!/^https?:$/.test(location.protocol)) throw new Error("Open the published HTTPS map to use OpenStreetMap search.");
+            const delay = Math.max(0, 1100 - (Date.now() - lastNominatimRequest));
+            if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+            lastNominatimRequest = Date.now();
+            return fetch(url, { headers: { Accept: "application/json" } });
+          };
+          const pending = nominatimQueue.then(request, request);
+          nominatimQueue = pending.then(() => undefined, () => undefined);
+          return pending;
+        }
+
+        function getName(feature) {
+          const p = feature.properties || {};
+          return p.name || p.Name || p.NAME || p.title || p.building || p.ref || "Unnamed campus feature";
+        }
+
+        function getProperty(properties, keys) {
+          for (const key of keys) {
+            const value = properties?.[key];
+            if (value !== undefined && value !== null && String(value).trim()) return value;
+          }
+          return "";
+        }
+
+        function getDescription(feature) {
+          return getProperty(feature.properties, ["description", "Description", "summary", "short_description", "notes", "note"]);
+        }
+
+        function ratingKey(feature) {
+          const properties = feature.properties || {};
+          const suppliedId = feature.id ?? properties.id ?? properties.ID ?? properties.uuid ?? properties.ref;
+          const point = pointFor(feature);
+          return String(suppliedId ?? `${getName(feature)}|${point ? point.map((value) => Number(value).toFixed(6)).join(",") : "unknown"}`);
+        }
+
+        function importedRating(feature) {
+          const properties = feature.properties || {};
+          const value = Number(getProperty(properties, ["average_rating", "avg_rating", "rating", "stars"]));
+          if (!Number.isFinite(value) || value < 0 || value > 5) return null;
+          const count = Number(getProperty(properties, ["review_count", "rating_count", "ratings_count"]));
+          return { value, count: Number.isFinite(count) && count > 0 ? count : null };
+        }
+
+        function formatProperty(value) {
+          if (Array.isArray(value)) return value.join(", ");
+          if (typeof value === "object" && value !== null) return JSON.stringify(value);
+          return String(value);
+        }
+
+        function renderDetails(feature) {
+          const properties = feature.properties || {};
+          const panel = $("location-details");
+          panel.hidden = false;
+          $("detail-name").textContent = getName(feature);
+          $("detail-category").textContent = getCategory(feature);
+          $("detail-description").textContent = getDescription(feature) || "No description has been provided for this location yet.";
+          const factDefinitions = [
+            ["Address", ["address", "addr:full", "full_address", "location"]],
+            ["Hours", ["opening_hours", "hours", "openingHours"]],
+            ["Access", ["accessibility", "wheelchair", "access"]],
+            ["Facilities", ["facilities", "amenities", "services"]],
+            ["Phone", ["phone", "contact:phone", "telephone"]],
+            ["Website", ["website", "url", "contact:website"]]
+          ];
+          const facts = $("detail-facts");
+          facts.replaceChildren();
+          factDefinitions.forEach(([label, keys]) => {
+            const value = getProperty(properties, keys);
+            if (!value) return;
+            const row = document.createElement("div");
+            row.className = "detail-fact";
+            const term = document.createElement("dt");
+            term.textContent = label;
+            const description = document.createElement("dd");
+            if (label === "Website") {
+              try {
+                const url = new URL(String(value), location.href);
+                if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported website protocol");
+                const link = document.createElement("a");
+                link.href = url.href;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = String(value);
+                description.append(link);
+              } catch { description.textContent = formatProperty(value); }
+            } else description.textContent = formatProperty(value);
+            row.append(term, description);
+            facts.append(row);
+          });
+          renderRating(feature);
+        }
+
+        function renderRating(feature) {
+          const average = importedRating(feature);
+          const ownRating = Number(savedRatings[ratingKey(feature)]) || 0;
+          $("rating-value").textContent = average ? `${average.value.toFixed(1)} / 5` : "Not rated";
+          $("rating-caption").textContent = average ? `${average.count ? `${average.count} imported rating${average.count === 1 ? "" : "s"}` : "Imported location rating"}` : "No imported rating";
+          $("rating-stars").textContent = average ? `${"★".repeat(Math.round(average.value))}${"☆".repeat(5 - Math.round(average.value))}` : "☆☆☆☆☆";
+          const buttons = $("rating-buttons");
+          buttons.replaceChildren();
+          for (let value = 1; value <= 5; value++) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "rating-button";
+            button.textContent = "★";
+            button.title = `Rate ${value} out of 5`;
+            button.setAttribute("aria-label", `Rate ${value} out of 5`);
+            button.setAttribute("aria-pressed", String(ownRating === value));
+            button.addEventListener("click", () => {
+              savedRatings[ratingKey(feature)] = value;
+              try {
+                localStorage.setItem(ratingStorageKey, JSON.stringify(savedRatings));
+                renderRating(feature);
+              } catch {
+                showToast("This browser could not save your rating.");
+              }
+            });
+            buttons.append(button);
+          }
+          $("rating-note").textContent = ownRating ? `Your rating: ${ownRating} out of 5 · saved in this browser only` : "Your rating is saved in this browser only.";
+        }
+
+        function getCategory(feature) {
+          const p = feature.properties || {};
+          const raw = String(p.category || p.type || p.amenity || p.building || "place").toLowerCase();
+          if (/dorm|hostel|residen|hall|housing/.test(raw)) return "residential";
+          if (/academic|school|university|class|lecture|library|faculty|education/.test(raw)) return "academic";
+          if (/service|food|shop|health|bank|parking|bus|toilet|cafe|restaurant/.test(raw)) return "services";
+          return raw.replaceAll("_", " ");
+        }
+
+        function pointFor(feature) {
+          const geometry = feature.geometry;
+          if (!geometry) return null;
+          if (geometry.type === "Point") return geometry.coordinates;
+          const bounds = new maplibregl.LngLatBounds();
+          const visit = (coordinates) => {
+            if (typeof coordinates[0] === "number") bounds.extend(coordinates);
+            else coordinates.forEach(visit);
+          };
+          visit(geometry.coordinates);
+          return bounds.isEmpty() ? null : bounds.getCenter().toArray();
+        }
+
+        function iconFor(category) {
+          if (category === "academic") return "▤";
+          if (category === "residential") return "⌂";
+          if (category === "services") return "＋";
+          return "·";
+        }
+
+        function visibleFeatures() {
+          const query = searchEl.value.trim().toLowerCase();
+          return features.filter((feature) => {
+            const category = getCategory(feature);
+            const searchable = `${getName(feature)} ${category} ${JSON.stringify(feature.properties || {})}`.toLowerCase();
+            return (activeCategory === "all" || category === activeCategory) && (!query || searchable.includes(query));
+          });
+        }
+
+        function renderPlaces() {
+          const visible = visibleFeatures();
+          $("place-count").textContent = `${visible.length} LOCATION${visible.length === 1 ? "" : "S"}`;
+          placesEl.replaceChildren();
+          if (!features.length) {
+            placesEl.innerHTML = '<div class="empty-state">Import campus GIS data to browse locations. Type to filter imported data, or submit a one-time OpenStreetMap search.</div>';
+            return;
+          }
+          if (!visible.length) {
+            placesEl.innerHTML = '<div class="empty-state">No matching locations in the loaded campus data.</div>';
+            return;
+          }
+          visible.slice(0, 60).forEach((feature) => {
+            const row = document.createElement("button");
+            row.className = `place-row${selectedFeature === feature ? " active" : ""}`;
+            row.type = "button";
+            row.innerHTML = `<span class="place-dot" aria-hidden="true">${iconFor(getCategory(feature))}</span><span><span class="place-name"></span><span class="place-kind"></span></span><span class="row-arrow" aria-hidden="true">›</span>`;
+            row.querySelector(".place-name").textContent = getName(feature);
+            row.querySelector(".place-kind").textContent = getCategory(feature);
+            const average = importedRating(feature);
+            if (average) {
+              const rating = document.createElement("span");
+              rating.className = "place-row-rating";
+              rating.textContent = `★ ${average.value.toFixed(1)}`;
+              row.querySelector(".place-name").after(rating);
+            }
+            row.addEventListener("click", () => focusFeature(feature));
+            placesEl.append(row);
+          });
+        }
+
+        function focusFeature(feature) {
+          selectedFeature = feature;
+          const point = pointFor(feature);
+          if (!point) return;
+          renderDetails(feature);
+          map.flyTo({ center: point, zoom: Math.max(map.getZoom(), 17), pitch: map.getPitch() });
+          new maplibregl.Popup({ offset: 14, closeButton: true })
+            .setLngLat(point)
+            .setHTML(`<div class="popup-name"></div><div class="popup-meta"></div>`)
+            .addTo(map)
+            .on("open", (event) => {
+              const popup = event.target.getElement();
+              popup.querySelector(".popup-name").textContent = getName(feature);
+              popup.querySelector(".popup-meta").textContent = getCategory(feature);
+            });
+          renderPlaces();
+        }
+
+        $("detail-close").addEventListener("click", () => {
+          selectedFeature = null;
+          $("location-details").hidden = true;
+          renderPlaces();
+        });
+
+        function setDataStatus(message) {
+          $("data-status").textContent = message;
+        }
+
+        function addCampusData(collection, label) {
+          const incoming = collection.type === "FeatureCollection" ? collection.features : collection.type === "Feature" ? [collection] : [];
+          const valid = incoming.filter((feature) => feature && feature.geometry && feature.geometry.coordinates);
+          if (!valid.length) throw new Error("No valid GeoJSON features found.");
+          features = [...features, ...valid];
+          if (map.getSource("campus-data")) {
+            map.getSource("campus-data").setData({ type: "FeatureCollection", features });
+          } else {
+            map.addSource("campus-data", { type: "geojson", data: { type: "FeatureCollection", features } });
+            map.addLayer({ id: "campus-fill", type: "fill", source: "campus-data", filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], paint: { "fill-color": "#8ba78b", "fill-opacity": 0.38, "fill-outline-color": "#335d46" } });
+            map.addLayer({ id: "campus-points", type: "circle", source: "campus-data", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 6, "circle-color": "#ef795b", "circle-stroke-color": "#fffef9", "circle-stroke-width": 2 } });
+            map.addLayer({ id: "campus-labels", type: "symbol", source: "campus-data", layout: { "text-field": ["coalesce", ["get", "name"], ["get", "Name"], ["get", "title"], ["get", "ref"], ""], "text-size": 11, "text-font": ["Open Sans Regular"], "text-offset": [0, 1.1], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": "#1e3029", "text-halo-color": "#fffef9", "text-halo-width": 1.5 } });
+            map.addLayer({ id: "campus-3d", type: "fill-extrusion", source: "campus-data", filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], layout: { visibility: "none" }, paint: { "fill-extrusion-color": "#749477", "fill-extrusion-height": ["to-number", ["coalesce", ["get", "height"], ["get", "Height"], ["get", "levels"], 12]], "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.88 } });
+            ["campus-fill", "campus-points"].forEach((layerId) => {
+              map.on("click", layerId, (event) => { if (event.features?.[0]) focusFeature(event.features[0]); });
+              map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
+              map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
+            });
+          }
+          setDataStatus(`${features.length} FEATURES LOADED`);
+          renderPlaces();
+          if (features.length) {
+            const bounds = new maplibregl.LngLatBounds();
+            features.forEach((feature) => {
+              const visit = (coordinates) => {
+                if (typeof coordinates[0] === "number") bounds.extend(coordinates);
+                else coordinates.forEach(visit);
+              };
+              visit(feature.geometry.coordinates);
+            });
+            if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 80, maxZoom: 17, duration: 700 });
+          }
+          showToast(`${valid.length} features loaded from ${label}`);
+        }
+
+        function parseKml(text) {
+          const xml = new DOMParser().parseFromString(text, "application/xml");
+          if (xml.querySelector("parsererror")) throw new Error("This KML file could not be read.");
+          const result = { type: "FeatureCollection", features: [] };
+          xml.querySelectorAll("Placemark").forEach((placemark) => {
+            const properties = {};
+            const name = placemark.querySelector("name")?.textContent?.trim();
+            if (name) properties.name = name;
+            placemark.querySelectorAll("ExtendedData Data").forEach((item) => {
+              const key = item.getAttribute("name");
+              const value = item.querySelector("value")?.textContent;
+              if (key && value) properties[key] = value;
+            });
+            placemark.querySelectorAll("Point, LineString, Polygon").forEach((geometryNode) => {
+              const coordinatesNode = geometryNode.querySelector("coordinates");
+              if (!coordinatesNode) return;
+              const points = coordinatesNode.textContent.trim().split(/\s+/).map((pair) => pair.split(",").slice(0, 2).map(Number)).filter((pair) => pair.length === 2 && pair.every(Number.isFinite));
+              if (!points.length) return;
+              const type = geometryNode.tagName;
+              const geometry = type === "Point" ? { type: "Point", coordinates: points[0] } : type === "LineString" ? { type: "LineString", coordinates: points } : { type: "Polygon", coordinates: [points] };
+              result.features.push({ type: "Feature", properties: { ...properties }, geometry });
+            });
+          });
+          return result;
+        }
+
+        function openFilePicker() { $("file-input").click(); }
+        $("import-map").addEventListener("click", openFilePicker);
+        $("import-link").addEventListener("click", openFilePicker);
+        $("file-input").addEventListener("change", async (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const collection = file.name.toLowerCase().endsWith(".kml") ? parseKml(text) : JSON.parse(text);
+            addCampusData(collection, file.name);
+          } catch (error) {
+            showToast(error.message || "Could not load this file.");
+          } finally {
+            event.target.value = "";
+          }
+        });
+
+        let dragDepth = 0;
+        const dropOverlay = $("drop-overlay");
+        document.addEventListener("dragenter", (event) => { event.preventDefault(); dragDepth++; dropOverlay.classList.add("show"); });
+        document.addEventListener("dragover", (event) => event.preventDefault());
+        document.addEventListener("dragleave", (event) => { event.preventDefault(); dragDepth--; if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove("show"); } });
+        document.addEventListener("drop", async (event) => {
+          event.preventDefault(); dragDepth = 0; dropOverlay.classList.remove("show");
+          const file = event.dataTransfer.files?.[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            addCampusData(file.name.toLowerCase().endsWith(".kml") ? parseKml(text) : JSON.parse(text), file.name);
+          } catch (error) { showToast(error.message || "Could not load this file."); }
+        });
+
+        $("filters").addEventListener("click", (event) => {
+          const button = event.target.closest("[data-category]");
+          if (!button) return;
+          activeCategory = button.dataset.category;
+          $("filters").querySelectorAll(".filter").forEach((filter) => filter.setAttribute("aria-pressed", String(filter === button)));
+          renderPlaces();
+        });
+
+        async function searchOpenStreetMap(query) {
+          if (query.length < 3) return;
+          try {
+            const url = new URL("https://nominatim.openstreetmap.org/search");
+            url.search = new URLSearchParams({ format: "jsonv2", q: `${query}, Obafemi Awolowo University, Ile-Ife`, limit: "4", viewbox: "4.46,7.57,4.59,7.47" });
+            const response = await fetchNominatim(url);
+            if (!response.ok) throw new Error("Search service unavailable");
+            const results = await response.json();
+            placesEl.replaceChildren();
+            $("place-count").textContent = `${results.length} OSM RESULT${results.length === 1 ? "" : "S"}`;
+            if (!results.length) {
+              placesEl.innerHTML = '<div class="empty-state">No OpenStreetMap results for this search.</div>';
+              return;
+            }
+            results.forEach((item) => {
+              const feature = { type: "Feature", properties: { name: item.display_name.split(",")[0], category: item.type || "place", address: item.display_name, external: true }, geometry: { type: "Point", coordinates: [Number(item.lon), Number(item.lat)] } };
+              const row = document.createElement("button");
+              row.className = "place-row";
+              row.type = "button";
+              row.innerHTML = '<span class="place-dot" aria-hidden="true">⌕</span><span><span class="place-name"></span><span class="place-kind">OpenStreetMap result</span></span><span class="row-arrow" aria-hidden="true">›</span>';
+              row.querySelector(".place-name").textContent = item.display_name.split(",").slice(0, 2).join(",");
+              row.addEventListener("click", () => focusFeature(feature));
+              placesEl.append(row);
+            });
+          } catch (error) {
+            showToast(error.message || "OpenStreetMap search is unavailable.");
+          }
+        }
+
+        searchEl.addEventListener("input", renderPlaces);
+        $("search-form").addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const query = searchEl.value.trim();
+          if (query.length < 3) return;
+          const localMatches = visibleFeatures();
+          if (localMatches.length) {
+            focusFeature(localMatches[0]);
+            return;
+          }
+          await searchOpenStreetMap(query);
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) { event.preventDefault(); searchEl.focus(); }
+        });
+
+        $("view-toggle").addEventListener("click", (event) => {
+          const button = event.currentTarget;
+          const enabled = button.getAttribute("aria-pressed") !== "true";
+          button.setAttribute("aria-pressed", String(enabled));
+          map.easeTo({ pitch: enabled ? 58 : 0, bearing: enabled ? -18 : 0, duration: 850 });
+          if (map.getLayer("campus-3d")) map.setLayoutProperty("campus-3d", "visibility", enabled ? "visible" : "none");
+          showToast(enabled ? (features.length ? "3D campus view enabled" : "3D view enabled; import building footprints for extrusions") : "2D campus view enabled");
+        });
+
+        $("locate").addEventListener("click", () => {
+          if (!navigator.geolocation) return showToast("Location is not available in this browser.");
+          navigator.geolocation.getCurrentPosition((position) => map.flyTo({ center: [position.coords.longitude, position.coords.latitude], zoom: 17 }), () => showToast("Location permission was not granted."), { enableHighAccuracy: true, timeout: 8000 });
+        });
+
+        async function geocode(query) {
+          const url = new URL("https://nominatim.openstreetmap.org/search");
+          url.search = new URLSearchParams({ format: "jsonv2", q: `${query}, Obafemi Awolowo University, Ile-Ife`, limit: "1", viewbox: "4.46,7.57,4.59,7.47" });
+          const response = await fetchNominatim(url);
+          if (!response.ok) throw new Error("Place search is unavailable right now.");
+          const [result] = await response.json();
+          if (!result) throw new Error(`Could not find “${query}” near campus.`);
+          return [Number(result.lon), Number(result.lat)];
+        }
+
+        $("route-button").addEventListener("click", async () => {
+          const fromText = $("route-from").value.trim();
+          const toText = $("route-to").value.trim();
+          if (!fromText || !toText) { routeStatus.textContent = "Enter both a start and destination."; return; }
+          routeStatus.textContent = "Finding a pedestrian route…";
+          try {
+            const [from, to] = await Promise.all([geocode(fromText), geocode(toText)]);
+            const routeUrl = `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${from[0]},${from[1]};${to[0]},${to[1]}?overview=full&geometries=geojson&steps=true`;
+            const response = await fetch(routeUrl);
+            if (!response.ok) throw new Error("The public walking router is unavailable.");
+            const data = await response.json();
+            if (!data.routes?.length) throw new Error("No walking route found for those places.");
+            const route = data.routes[0];
+            routeGeoJson = { type: "Feature", properties: {}, geometry: route.geometry };
+            if (map.getSource("walking-route")) map.getSource("walking-route").setData(routeGeoJson);
+            else {
+              map.addSource("walking-route", { type: "geojson", data: routeGeoJson });
+              map.addLayer({ id: "walking-route-line", type: "line", source: "walking-route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#ef795b", "line-width": 5, "line-opacity": 0.92 } });
+            }
+            const bounds = new maplibregl.LngLatBounds();
+            route.geometry.coordinates.forEach((point) => bounds.extend(point));
+            map.fitBounds(bounds, { padding: 95, duration: 700 });
+            routeStatus.textContent = `${(route.distance / 1000).toFixed(1)} km · about ${Math.round(route.duration / 60)} min on foot`;
+          } catch (error) {
+            routeStatus.textContent = error.message || "Could not calculate a route.";
+          }
+        });
+        $("clear-route").addEventListener("click", () => {
+          if (map.getSource("walking-route")) map.getSource("walking-route").setData({ type: "FeatureCollection", features: [] });
+          routeStatus.textContent = "Pedestrian routing uses OpenStreetMap data.";
+          $("route-from").value = ""; $("route-to").value = "";
+        });
+
+        function updateClock() {
+          $("campus-time").textContent = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+        }
+        updateClock();
+        setInterval(updateClock, 30000);
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=7.52&longitude=4.53&current=temperature_2m,weather_code&timezone=Africa%2FLagos")
+          .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
+          .then((data) => {
+            const current = data.current;
+            const descriptions = { 0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Cloudy", 45: "Fog", 48: "Fog", 51: "Drizzle", 53: "Drizzle", 55: "Drizzle", 61: "Rain", 63: "Rain", 65: "Heavy rain", 80: "Showers", 81: "Showers", 82: "Heavy showers", 95: "Thunderstorm" };
+            $("weather-temp").textContent = `${Math.round(current.temperature_2m)}°`;
+            $("weather-copy").textContent = descriptions[current.weather_code] || "Current conditions";
+          })
+          .catch(() => { $("weather-copy").textContent = "Weather unavailable"; });
+
+        map.on("load", () => {
+          setDataStatus("NO CAMPUS DATA");
+        });
+        map.on("error", (event) => {
+          if (event.error?.message?.includes("tile")) showToast("Map tiles are taking a moment to load.");
+        });
+      })();
+    </script>
+  </body>
+</html>
