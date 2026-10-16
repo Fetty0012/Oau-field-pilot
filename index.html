@@ -130,7 +130,7 @@
       .legend-block { width: 9px; height: 9px; background: #8ba78b; }
       .map-toast { position: absolute; z-index: 4; left: 50%; bottom: 25px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; padding: 10px 14px; border-radius: 3px; background: var(--green-deep); color: white; font-size: 11px; transition: opacity .2s, transform .2s; }
       .map-toast.show { opacity: 1; transform: translate(-50%, 0); }
-      .map-footer { position: absolute; bottom: 0; left: 0; padding: 5px 9px; color: #546359; background: #fffef9e8; font: 9px var(--mono); }
+      .map-footer { position: absolute; z-index: 1; bottom: 28px; left: 8px; padding: 5px 9px; color: #546359; background: #fffef9e8; font: 9px var(--mono); }
       .map-footer a { color: var(--green); }
       .maplibregl-popup-content { border-radius: 3px; padding: 12px 14px; font-family: var(--sans); box-shadow: 0 6px 24px #1c302933; }
       .popup-name { font-weight: 800; font-size: 13px; }
@@ -246,7 +246,7 @@
         </div>
         <div class="map-legend"><span class="legend-item"><i class="legend-dot"></i> Selected place</span><span class="legend-item"><i class="legend-block"></i> Imported features</span></div>
         <div class="map-toast" id="toast" role="status"></div>
-        <div class="map-footer">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Report a map issue</a></div>
+        <div class="map-footer"><a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> · Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Report an issue</a></div>
         <div class="drop-overlay" id="drop-overlay">Drop a GIS export to load it<small>GeoJSON, JSON or KML</small></div>
         <input id="file-input" type="file" accept=".geojson,.json,.kml,application/geo+json,application/json,application/vnd.google-earth.kml+xml" hidden />
       </section>
@@ -255,19 +255,7 @@
       (() => {
         const campus = { center: [4.5274, 7.5189], zoom: 15.2 };
         const hostedOverHttps = location.protocol === "https:";
-        const osmStyle = {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>'
-            }
-          },
-          layers: [{ id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.22, "raster-contrast": 0.04 } }]
-        };
-        const mapStyle = hostedOverHttps ? osmStyle : {
+        const mapStyle = hostedOverHttps ? "https://tiles.openfreemap.org/styles/liberty" : {
           version: 8,
           sources: {},
           layers: [{ id: "local-background", type: "background", paint: { "background-color": "#dce2d5" } }]
@@ -282,6 +270,7 @@
           pitch: 0,
           attributionControl: false
         });
+        if (hostedOverHttps) map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 110, unit: "metric" }), "bottom-left");
 
